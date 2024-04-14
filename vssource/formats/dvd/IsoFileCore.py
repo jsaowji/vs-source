@@ -307,7 +307,7 @@ class IsoFileCore:
         # you could either always add the end as chapter or stretch the last chapter till the end
         output_chapters = [0] + output_chapters
 
-        lastframe = len(rnode)
+        lastframe = len(rnode) - 1
         if output_chapters[-1] != lastframe:
             patched_end_chapter = output_chapters[-1]
             output_chapters[-1] = lastframe
