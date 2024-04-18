@@ -69,6 +69,7 @@ class IsoFileCore:
 
             _ifo0b = _getifo(0)
 
+            # remove in 2025
             if len(_ifo0b) <= 30:
                 warnings.warn('Newer VapourSynth is required for dvdsrc2 information gathering without mounting!')
             else:
@@ -307,11 +308,10 @@ class IsoFileCore:
         # TODO: verify these claims and check the splitting logic and figure out what the best solution is
         # you could either always add the end as chapter or stretch the last chapter till the end
         output_chapters = [0] + output_chapters
-
-        lastframe = len(rnode) - 1
-        if output_chapters[-1] != lastframe:
+        lastchpt = len(rnode)
+        if output_chapters[-1] != lastchpt:
             patched_end_chapter = output_chapters[-1]
-            output_chapters[-1] = lastframe
+            output_chapters[-1] = lastchpt
 
         audios = list[str]()
         for i, ac in enumerate(target_pgc.audio_control):
@@ -331,6 +331,8 @@ class IsoFileCore:
 
         durationcodesf = list(map(float, durationcodes))
 
+        assert output_chapters[0] == 0
+        assert output_chapters[-1] == len(rnode)
         return Title(
             rnode, output_chapters, changes, self, title_idx, tt.title_set_nr,
             vobidcellids_to_take, dvdsrc_ranges, absolutetime, durationcodesf,
@@ -344,6 +346,7 @@ class IsoFileCore:
         ]
 
     def __repr__(self) -> str:
+
         to_print = f"Path: {self.iso_path}\n"
         to_print += f"Mount: {self._mount_path}\n"
         for i, tt in enumerate(self.ifo0.tt_srpt):
@@ -351,22 +354,39 @@ class IsoFileCore:
             ptts = target_vts.vts_ptt_srpt[tt.vts_ttn - 1]
 
             current_time = 0.0
-            timestrings = []
-            absolutestrings = []
+            seconds = []
+            vobids = []
             for a in ptts:
                 target_pgc = target_vts.vts_pgci.pgcs[a.pgcn - 1]
                 cell_n = target_pgc.program_map[a.pgn - 1]
 
                 chap_time = target_pgc.cell_playback[cell_n - 1].playback_time.get_seconds_float()
+                vobid = target_pgc.cell_position[cell_n - 1]
+
                 current_time += chap_time
-
-                timestrings += [str(datetime.timedelta(seconds=chap_time))]
-                absolutestrings += [str(datetime.timedelta(seconds=current_time))]
-
+                seconds += [chap_time]
+                vobids += [(vobid.vob_id_nr, vobid.cell_nr)]
             to_print += f'Title: {i+1:02}\n'
-            to_print += f'length: {timestrings}\n'
-            to_print += f'end   : {absolutestrings}\n'
-            to_print += '\n'
+            lastv = None
+
+            crnt = 0
+            crnt_glbl = 0
+            to_print += "  nbr vobid start localstart localend duration\n"
+            for i, v in enumerate(vobids):
+                if lastv != v[0]:
+                    # to_print += f"  vob {v[0]}\n"
+                    if i != 0:
+                        to_print += "\n"
+                    crnt = 0
+                    lastv = v[0]
+                sta = str(datetime.timedelta(seconds=crnt))
+                sta_g = str(datetime.timedelta(seconds=crnt_glbl))
+                end = str(datetime.timedelta(seconds=crnt + seconds[i]))
+                dur = str(datetime.timedelta(seconds=seconds[i]))
+
+                to_print += f"  {i+1:02} {v} start={sta_g} local={sta} end={end} duration={dur}\n"
+                crnt += seconds[i]
+                crnt_glbl += seconds[i]
 
         return to_print.strip()
 

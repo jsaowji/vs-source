@@ -3,7 +3,7 @@ from __future__ import annotations
 import datetime
 from dataclasses import dataclass
 from itertools import count
-from typing import TYPE_CHECKING, Callable, Iterator, Sequence, SupportsIndex, overload
+from typing import TYPE_CHECKING, Callable, Iterator, Sequence, SupportsIndex, overload, Optional
 
 from vstools import CustomValueError, FuncExceptT, T, get_prop, set_output, to_arr, vs, vs_object
 
@@ -20,6 +20,7 @@ __all__ = [
 
 @dataclass
 class SplitTitle:
+    # maybe just return None instead of a SplitTitle with video None
     video: vs.VideoNode
     audio: list[vs.AudioNode] | None
     chapters: list[int]
@@ -31,16 +32,17 @@ class SplitTitle:
         return SplitHelper.split_range_ac3(self._title, *self._split_chpts, audio_i, outfile)
 
     def __repr__(self) -> str:
+        if self.video is None:
+            return "None"
         # TODO: use absolutetime from title
-        _absolute_time = absolute_time_from_timecode(
-            [1 / float(self.video.fps)] * len(self.video)
-        )
+        _duration_times = [1 / float(self.video.fps)] * len(self.video)
+        _absolute_time = absolute_time_from_timecode(_duration_times)
 
-        chapters = self.chapters + [len(self.video) - 1]
+        chapters = self.chapters
 
         chapter_lengths = [
-            _absolute_time[chapters[i + 1]] - _absolute_time[chapters[i]]
-            for i in range(len(self.chapters))
+            (_absolute_time[chapters[i + 1] - 1] + _duration_times[chapters[i + 1] - 1]) - _absolute_time[chapters[i]]
+            for i in range(len(self.chapters) - 1)
         ]
 
         chapter_lengths_str = [
@@ -172,6 +174,16 @@ class Title:
         return self.audios[0]
 
     def split_at(self, splits: list[int], audio: int | list[int] | None = None) -> tuple[SplitTitle, ...]:
+        # Check if chapters are still valid, user is allowed to manipulated them
+        last_chpt = -1
+        for a in self.chapters:
+            if a < 0:
+                raise CustomValueError(f'Negative chapter point {a}', self.split_at)
+            if a <= last_chpt:
+                raise CustomValueError(f'Chapter must be monotonly increasing {a} before {last_chpt}', self.split_at)
+            if a > len(self.video):
+                raise CustomValueError(f'Chapter must not be higher than video length', self.split_at)
+            last_chpt = a
         output_cnt = SplitHelper._sanitize_splits(self, splits)
         video = SplitHelper.split_video(self, splits)
         chapters = SplitHelper.split_chapters(self, splits)
@@ -260,14 +272,15 @@ class Title:
         return float(get_prop(p0, 'Stuff_Start_PTS', int)) / PCR_CLOCK
 
     def __repr__(self) -> str:
-        chapters = [*self.chapters, len(self.video) - 1]
+        chapters = [*self.chapters]
         chapter_lengths = [
-            self._absolute_time[chapters[i + 1]] - self._absolute_time[chapters[i]]
-            for i in range(len(self.chapters))
+            (self._absolute_time[chapters[i + 1] - 1]
+             + self._duration_times[chapters[i + 1] - 1]) - self._absolute_time[chapters[i]]
+            for i in range(len(self.chapters) - 1)
         ]
 
         chapter_lengths_str = [str(datetime.timedelta(seconds=x)) for x in chapter_lengths]
-        timestrings = [str(datetime.timedelta(seconds=self._absolute_time[x])) for x in self.chapters]
+        timestrings = [str(datetime.timedelta(seconds=self._absolute_time[x])) for x in self.chapters[:-1]]
 
         to_print = 'Chapters:\n'
         for i in range(len(timestrings)):
@@ -377,8 +390,10 @@ class SplitHelper:
 
         for a in splits:
             assert isinstance(a, int)
-            assert a > lasta
-            assert a <= len(title.chapters)
+            if not (a > lasta):
+                raise CustomValueError('Chapter splits are not ordered correctly!', SplitHelper._sanitize_splits)
+            if not (a <= len(title.chapters)):
+                raise CustomValueError('Chapter split is out of bounds!', SplitHelper._sanitize_splits)
 
             lasta = a
 
@@ -398,19 +413,20 @@ class SplitHelper:
         return tuple(out)
 
     @staticmethod
-    def _cut_fz_v(title: Title, vnode: vs.VideoNode, f: int, t: int) -> vs.VideoNode:
-        # starting 0
-        # end inclusive
-        #  0 0 -> chapter 0
+    def _cut_fz_v(title: Title, vnode: vs.VideoNode, f: int, t: int) -> Optional[vs.VideoNode]:
         f = title.chapters[f]
         t = title.chapters[t]
         assert f >= 0
         assert t <= len(vnode)
         assert f <= t
-        return vnode[f:t]
+
+        if f == t:
+            return None
+        else:
+            return vnode[f:t]
 
     @staticmethod
-    def _cut_fz_a(title: Title, anode: vs.AudioNode, start: int, end: int) -> vs.AudioNode:
+    def _cut_fz_a(title: Title, anode: vs.AudioNode, start: int, end: int) -> Optional[vs.AudioNode]:
         chapter_idxs = [title.chapters[i] for i in (start, end)]
         timecodes = [title._absolute_time[i] if i != len(
             title._absolute_time) else title._absolute_time[i - 1] + title._duration_times[i - 1] for i in chapter_idxs]
@@ -421,7 +437,6 @@ class SplitHelper:
         ]
 
         if samples_start == samples_end:
-            # ???????
-            return anode.std.BlankAudio(length=1)
+            return None
         else:
             return anode[samples_start:samples_end]

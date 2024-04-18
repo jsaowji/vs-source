@@ -151,6 +151,25 @@ b[1].video.set_output(0)
 b[1].audios[0].set_output(1)
 ```
 
-The `Title.split_at` method should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1), so if you want the (first chapter, all other chapters after).
+The `Title.split_at` method should behave just like mkvmerge chapter splits (split before the chapter, first chapter is 1), so if you want the (first chapter, all other chapters after) 2.
 
-Output chapters always start with frame zero and end at last frame.
+Output chapters always start with frame zero and end one past the last frame.
+This has been chosen because it allows you to change the video boundries and for example cut stuff off from the end.
+Thats in contrast to how dvd chapters work as their only supposed to be points you jump to.
+
+```
++---+----------+------+---+---+--------+--------+---+
+| 1 |     2    |   3  | 4 | 5 |    6   |    7   | 8 |
++---+----------+------+---+---+--------+--------+---+
+split_at([5])
++---+----------+------+---+
+| 1 |     2    |   3  | 4 |
++---+----------+------+---+
++---+--------+--------+---+
+| 5 |    6   |    7   | 8 |
++---+--------+--------+---+
+split_range(1,3)
++---+----------+------+
+| 1 |     2    |   3  |
++---+----------+------+
+```
