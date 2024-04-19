@@ -22,7 +22,7 @@ __all__ = [
 class SplitTitle:
     # maybe just return None instead of a SplitTitle with video None
     video: vs.VideoNode
-    audio: list[vs.AudioNode] | None
+    audios: list[vs.AudioNode]
     chapters: list[int]
 
     _title: Title
@@ -62,8 +62,8 @@ class SplitTitle:
 
         to_print.append('Audios: (fz)')
 
-        if self.audio is not None:
-            to_print.extend([f'{i} {a}' for i, a in enumerate(self.audio)])
+        if len(self.audios) >= 1:
+            to_print.extend([f'{i} {a}' for i, a in enumerate(self.audios)])
 
         return '\n'.join(to_print)
 
@@ -188,7 +188,7 @@ class Title:
         video = SplitHelper.split_video(self, splits)
         chapters = SplitHelper.split_chapters(self, splits)
 
-        audios: list[list[vs.AudioNode] | None]
+        audios: list[list[vs.AudioNode]]
 
         if audio is not None and (audio := to_arr(audio)):
             audio_per_output_cnt = len(audio)
@@ -199,7 +199,7 @@ class Title:
                 [auds[j][i] for j in range(audio_per_output_cnt)] for i in range(output_cnt)
             ]
         else:
-            audios = [None] * output_cnt
+            audios = [[]] * output_cnt
 
         fromy = 1
         from_to_s = list[tuple[int, int]]()
@@ -247,8 +247,8 @@ class Title:
                 set_output(s.video, f'split {i}')
 
             for i, s in enumerate(split):
-                if s.audio:
-                    for j, audio in enumerate(s.audio):
+                if len(s.audios) >= 1:
+                    for j, audio in enumerate(s.audios):
                         set_output(audio, f'split {i} - {j}')
 
     def _assert_dvdsrc2(self, func: FuncExceptT) -> None:

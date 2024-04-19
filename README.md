@@ -104,7 +104,7 @@ print(ep1.chapters[:-1])
 
 set_output([
     ep1.video,
-    ep1.audio,
+    ep1.audios[0],
 ])
 
 a = ep1.ac3('/tmp/ep1.ac3',0)
@@ -141,7 +141,7 @@ a = iso.get_title(4, angle_nr=1, rff_mode=2).split_at([5, 10, 15],audio=1)
 
 # EP 1 japanese
 a[0].video.set_output(0)
-a[0].audio.set_output(1)
+a[0].audios[0].set_output(1)
 
 # italian
 b = iso.get_title(4, angle_nr=2, rff_mode=2).split_at([5, 10, 15],audio=0)

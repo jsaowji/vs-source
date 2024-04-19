@@ -307,11 +307,14 @@ class IsoFileCore:
         # (the splitting logic assumes though that there is a chapter at the start and end)
         # TODO: verify these claims and check the splitting logic and figure out what the best solution is
         # you could either always add the end as chapter or stretch the last chapter till the end
+        # Guess #1: We only need to handle the case where last is not acually a chapter so stretching
+        # is the only correct solution there, adding would be wrong
         output_chapters = [0] + output_chapters
         lastchpt = len(rnode)
         if output_chapters[-1] != lastchpt:
             patched_end_chapter = output_chapters[-1]
             output_chapters[-1] = lastchpt
+#            output_chapters += [lastchpt]
 
         audios = list[str]()
         for i, ac in enumerate(target_pgc.audio_control):
@@ -346,7 +349,6 @@ class IsoFileCore:
         ]
 
     def __repr__(self) -> str:
-
         to_print = f"Path: {self.iso_path}\n"
         to_print += f"Mount: {self._mount_path}\n"
         for i, tt in enumerate(self.ifo0.tt_srpt):
@@ -374,7 +376,6 @@ class IsoFileCore:
             to_print += "  nbr vobid start localstart localend duration\n"
             for i, v in enumerate(vobids):
                 if lastv != v[0]:
-                    # to_print += f"  vob {v[0]}\n"
                     if i != 0:
                         to_print += "\n"
                     crnt = 0
