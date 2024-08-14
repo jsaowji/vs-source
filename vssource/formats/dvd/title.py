@@ -255,6 +255,17 @@ class Title:
         if not self._dvdsrc_ranges:
             raise CustomValueError('Title needs to be opened with dvdsrc2!', func)
 
+    def dump_vob(self, outpath: str):
+        self._assert_dvdsrc2(self.dump_vob)
+        if not hasattr(vs.core.dvdsrc2,"RawVob"):
+            raise CustomValueError('Newer dvdsrc2 is needed for dump_raw', self.dump_vob)
+
+        nd = vs.core.dvdsrc2.RawVob(str(self._core.iso_path), self._vts, self._dvdsrc_ranges)
+
+        with open(outpath, 'wb') as wrt:
+            for f in nd.frames():
+                wrt.write(bytes(f[0]))
+
     def dump_ac3(self, a: str, audio_i: int = 0, only_calc_delay: bool = False) -> float:
         self._assert_dvdsrc2(self.dump_ac3)
 

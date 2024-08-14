@@ -96,6 +96,13 @@ class IsoFileCore:
 
         self.title_count = len(self.ifo0.tt_srpt)
 
+    def dump_json(self, outfile: str):
+        our_json = to_json(self.ifo0, self.vts)
+        v = json.dumps(our_json, sort_keys=True)
+
+        with open(outfile, 'wt') as file:
+            file.write(v)
+
     def get_vts(self, title_set_nr: int = 1, d2v_our_rff: bool = False) -> vs.VideoNode:
         """
         Gets a full vts.
