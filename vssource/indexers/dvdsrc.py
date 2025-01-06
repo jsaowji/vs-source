@@ -52,7 +52,7 @@ class DVDSRCIndexer(DVDIndexer):
 
         if not disable_rff:
             rnode = apply_rff_video(rawnode, staff.rff, staff.tff, staff.prog, staff.progseq)
-            _vobids = apply_rff_array(staff.vobids, staff.rff, staff.tff, staff.progseq)
+            _vobids = apply_rff_array(staff.vobids, staff.rff, staff.tff,staff.prog,staff.progseq)
         else:
             rnode = rawnode
             _vobids = staff.vobids

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 import warnings
 from copy import deepcopy
 from itertools import count
@@ -12,58 +13,31 @@ __all__ = [
     'cut_array_on_ranges'
 ]
 
+@dataclass
+class Field:
+    n: int
+    is_tf: bool
+    is_repeat: bool
+    prog: bool
+    user_data: object
 
-def apply_rff_array(old_array: Sequence[T], rff: Sequence[int], tff: Sequence[int], prog_seq: Sequence[int]) -> list[T]:
-    array_double_rate = list[T]()
+def rff_frames_to_fields(rff: list[int], tff: list[int], prog: list[int], prog_seq: list[int], user_data: list[T]):
+    fields = list[Field]()
 
-    for prog, arr, rffv, tffv in zip(prog_seq, old_array, rff, tff):
-        repeat_amount = (3 if rffv else 2) if prog == 0 else ((6 if tffv else 4) if rffv else 2)
-
-        array_double_rate.extend([arr] * repeat_amount)
-
-    # assert (len(array_double_rate) % 2) == 0
-    if (len(array_double_rate) % 2) != 0:
-        warnings.warn('uneven amount of fields removing last\n')
-        array_double_rate = array_double_rate[:-1]
-
-    # It seems really weird thats its allowed to have rff stuff across
-    # vob boundries even for multi angle stuff i have seen this so often though it is ok to remove the warnings
-    # for i, f1, f2 in zip(count(), array_double_rate[::2], array_double_rate[1::2]):
-    #    if f1 != f2:
-    #        warnings.warn(
-    #            f'Ambiguous pattern due to rff {f1}!={f2} on index {i}\n'
-    #            'This probably just means telecine happened across chapters boundary.'
-    #        )
-
-    return array_double_rate[::2]
-
-
-def apply_rff_video(
-    node: vs.VideoNode, rff: list[int], tff: list[int], prog: list[int], prog_seq: list[int]
-) -> vs.VideoNode:
-    assert len(node) == len(rff) == len(tff) == len(prog) == len(prog_seq)
-
-    fields = list[dict[str, int]]()
-    tfffs = node.std.RemoveFrameProps(['_FieldBased', '_Field']).std.SeparateFields(True)
-
-    for i, current_prg_seq, current_prg, current_rff, current_tff in zip(count(), prog_seq, prog, rff, tff):
+    for i, current_prg_seq, current_prg, current_rff, current_tff,current_ud in zip(count(), prog_seq, prog, rff, tff, user_data):
         if not current_prg_seq:
-            if current_tff:
-                first_field = 2 * i
-                second_field = 2 * i + 1
-            else:
-                first_field = 2 * i + 1
-                second_field = 2 * i
+            first_field  = [2*i+1, 2*i+0][current_tff]
+            second_field = [2*i+0, 2*i+1][current_tff]
 
             fields += [
-                {'n': first_field, 'tf': current_tff, 'prg': False, 'repeat': False},
-                {'n': second_field, 'tf': not current_tff, 'prg': False, 'repeat': False}
+                Field(first_field, current_tff, False,False,current_ud),
+                Field(second_field, not current_tff, False,False,current_ud)
             ]
 
             if current_rff:
                 assert current_prg
                 repeat_field = deepcopy(fields[-2])
-                repeat_field['repeat'] = True
+                repeat_field.is_repeat = True
                 fields.append(repeat_field)
         else:
             assert current_prg
@@ -72,37 +46,63 @@ def apply_rff_video(
             if current_rff:
                 field_count += 1 + int(current_tff)
 
+            #maybe set is_repeat even for progressive repeats ?
             fields += [
-                {'n': 2 * i, 'tf': 1, 'prg': True, 'repeat': False},
-                {'n': 2 * i + 1, 'tf': 0, 'prg': True, 'repeat': False}
+                Field(2 * i,     True, False,True,current_ud),
+                Field(2 * i + 1, False, False,True,current_ud),
             ] * field_count
 
-    # TODO: mark known progressive frames as progressive
+    #There might be a need to make this adjustable
+    fixmode_invalid_tff_parity: int = 1
 
-    # assert (len(fields) % 2) == 0
+
+    a = 0
+    while a < (len(fields) // 2) * 2:
+        tf = fields[a]
+        bf = fields[a+1]
+        if tf.is_tf == bf.is_tf:
+            warnings.warn(f'Invalid field transition at {a / 2} {tf} {bf}')
+
+            if fixmode_invalid_tff_parity == 0:
+                bf.is_tf = not bf.is_tf
+            else:
+                fc = deepcopy(tf)
+                fc.is_tf = not fc.is_tf
+                fields.insert(a+1,fc)
+        a += 2
+
     if (len(fields) % 2) != 0:
         warnings.warn('uneven amount of fields removing last\n')
         fields = fields[:-1]
 
-    for a, tf, bf in zip(count(), fields[::2], fields[1::2]):
-        if tf['tf'] == bf['tf']:
-            bf['tf'] = not bf['tf']
+    return fields
+    
 
-            warnings.warn(f'Invalid field transition at {a}')
+
+def apply_rff_array(old_array: list[T], rff: list[int], tff: list[int], prog: list[int], prog_seq: list[int]) -> list[T]:
+    return list([f.user_data for f in rff_frames_to_fields(rff,tff,prog,prog_seq,old_array)][1::2])
+
+def apply_rff_video(
+    node: vs.VideoNode, rff: list[int], tff: list[int], prog: list[int], prog_seq: list[int]
+) -> vs.VideoNode:
+    assert len(node) == len(rff) == len(tff) == len(prog) == len(prog_seq)
+
+    tfffs = node.std.RemoveFrameProps(['_FieldBased', '_Field']).std.SeparateFields(True)
+    fields = rff_frames_to_fields(rff,tff,prog,prog_seq,list(range(len(tff))))
 
     for fcurr, fnext in zip(fields[::2], fields[1::2]):
-        if fcurr['tf'] == fnext['tf']:
+        if fcurr.is_tf == fnext.is_tf:
             raise CustomRuntimeError(
-                f'Found invalid stream with two consecutive {"top" if fcurr["tf"] else "bottom"} fields!'
+                f'Found invalid stream with two consecutive {"top" if fcurr.is_tf else "bottom"} fields!'
             )
 
-    final = remap_frames(tfffs, [x['n'] for x in fields])
+    final = remap_frames(tfffs, [x.n for x in fields])
 
     def _set_field(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
         f = f.copy()
 
         f.props.pop('_FieldBased', None)
-        f.props._Field = fields[n]['tf']
+        f.props._Field = fields[n].is_tf
 
         return f
 
@@ -112,9 +112,9 @@ def apply_rff_video(
 
     def _set_repeat(n: int, f: vs.VideoFrame) -> vs.VideoFrame:
         f = f.copy()
-        if fields[n * 2]['repeat']:
+        if fields[n * 2].is_repeat:
             f.props['RepeatedField'] = 1
-        elif fields[n * 2 + 1]['repeat']:
+        elif fields[n * 2 + 1].is_repeat:
             f.props['RepeatedField'] = 0
         else:
             f.props['RepeatedField'] = -1
@@ -129,7 +129,7 @@ def apply_rff_video(
         tf = fields[n * 2]
         bf = fields[n * 2 + 1]
 
-        if tf['prg'] and bf['prg']:
+        if tf.prog and bf.prog:
             fout.props['_FieldBased'] = 0
 
         return fout

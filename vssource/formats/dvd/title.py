@@ -257,7 +257,7 @@ class Title:
 
     def dump_vob(self, outpath: str):
         self._assert_dvdsrc2(self.dump_vob)
-        if not hasattr(vs.core.dvdsrc2,"RawVob"):
+        if not hasattr(vs.core.dvdsrc2, "RawVob"):
             raise CustomValueError('Newer dvdsrc2 is needed for dump_raw', self.dump_vob)
 
         nd = vs.core.dvdsrc2.RawVob(str(self._core.iso_path), self._vts, self._dvdsrc_ranges)

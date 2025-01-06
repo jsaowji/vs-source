@@ -171,7 +171,7 @@ class D2VWitch(DVDExtIndexer):
             prog = [int((a & 0b01000000) != 0) for a in fflags]
 
             node = apply_rff_video(node, rff, tff, prog, progseq)
-            vobids = apply_rff_array(vobids, rff, tff, progseq)
+            vobids = apply_rff_array(vobids, rff, tff, prog, progseq)
 
         return node, rff, vobids, []
 
