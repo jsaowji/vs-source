@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING, Sequence
-
+import warnings
+from vssource.formats.dvd.parsedvd import CellAdr
 from vstools import SPath, core, get_prop, vs
 
 from ..dataclasses import AllNeddedDvdFrameData
@@ -18,9 +19,19 @@ __all__ = [
 
 
 def get_sectorranges_for_vobcellpair(current_vts: IFOX, pair_id: tuple[int, int]) -> list[tuple[int, int]]:
+    e = set((a.start_sector,a.last_sector) for a in current_vts.vts_c_adt.cell_adr_table)
+    if len(e) != len(current_vts.vts_c_adt.cell_adr_table):
+        warnings.warn(f"DVD sector pair belongs to two cells {len(e)} {len(current_vts.vts_c_adt.cell_adr_table)}\n")
+        fixd = {}
+        for a in current_vts.vts_c_adt.cell_adr_table:
+            fixd[(a.start_sector,a.last_sector)] = (a.vob_id,a.cell_id)
+        cell_adr_table_patch = [ CellAdr(kv[1][0],kv[1][1],kv[0][0],kv[0][1],-1)for kv in fixd.items() ]
+    else:
+        cell_adr_table_patch = current_vts.vts_c_adt.cell_adr_table
+
     return [
         (e.start_sector, e.last_sector)
-        for e in current_vts.vts_c_adt.cell_adr_table
+        for e in cell_adr_table_patch
         if (e.vob_id, e.cell_id) == pair_id
     ]
 

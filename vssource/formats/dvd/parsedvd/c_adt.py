@@ -17,6 +17,8 @@ class CellAdr:
     start_sector: int
     last_sector: int
 
+    unk0: int
+
 
 @dataclass
 class CADT:
@@ -31,5 +33,5 @@ class CADT:
         cnt = (end + 1 - 6) // 12
 
         for _ in range(cnt):
-            vob_id, cell_id, __, start_sector, last_sector = reader._unpack_byte(2, 1, 1, 4, 4)
-            self.cell_adr_table.append(CellAdr(vob_id, cell_id, start_sector, last_sector))
+            vob_id, cell_id, unk0, start_sector, last_sector = reader._unpack_byte(2, 1, 1, 4, 4)
+            self.cell_adr_table.append(CellAdr(vob_id, cell_id, start_sector, last_sector,unk0))
